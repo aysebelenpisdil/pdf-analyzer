@@ -1,18 +1,12 @@
-import { pdfjs } from 'react-pdf';
-import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
-import 'react-pdf/dist/esm/Page/TextLayer.css';
-
-// Worker'ı ayarla
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
-
 export class PDFProcessor {
   static async extractText(file) {
     try {
-      // PDF dosyasını ArrayBuffer olarak oku
-      const arrayBuffer = await file.arrayBuffer();
+      if (typeof pdfjsLib === 'undefined') {
+        throw new Error('PDF.js kütüphanesi yüklenmedi. Lütfen sayfayı yenileyin.');
+      }
       
-      // PDF.js ile dosyayı yükle
-      const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
+      const arrayBuffer = await file.arrayBuffer();
+      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
       const pdf = await loadingTask.promise;
       
       let fullText = '';
@@ -23,12 +17,10 @@ export class PDFProcessor {
         characterCount: 0
       };
       
-      // Her sayfayı işle
       for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
         const page = await pdf.getPage(pageNum);
         const textContent = await page.getTextContent();
         
-        // Sayfa metnini birleştir
         const pageText = textContent.items
           .map(item => item.str)
           .join(' ');
@@ -37,7 +29,6 @@ export class PDFProcessor {
         metadata.extractedPages++;
       }
       
-      // İstatistikleri hesapla
       metadata.wordCount = fullText.split(/\s+/).filter(word => word.length > 0).length;
       metadata.characterCount = fullText.length;
       
@@ -60,7 +51,6 @@ export class PDFProcessor {
   
   static async analyzeWithClaude(text, fileName) {
     try {
-      // Backend API'ye istek gönder
       const response = await fetch('http://localhost:5000/api/analyze', {
         method: 'POST',
         headers: {
