@@ -35,7 +35,6 @@ function App() {
     setProcessingProgress(0);
     
     try {
-      // 1. PDF'den metin çıkar
       setProcessingStage('PDF okunuyor...');
       setProcessingProgress(20);
       
@@ -48,34 +47,59 @@ function App() {
       setProcessingProgress(50);
       setExtractedText(extractionResult.text);
       
-      // 2. Metni göster
       setProcessingStage('Metin çıkarıldı!');
       setProcessingProgress(70);
       
-      // 3. Claude ile analiz (şimdilik simüle edilmiş)
-      setProcessingStage('Metin analiz ediliyor...');
+      setProcessingStage('Claude ile analiz ediliyor...');
       setProcessingProgress(90);
       
-      // Simüle edilmiş analiz sonucu
-      setTimeout(() => {
-        const mockAnalysis = {
-          summary: 'PDF başarıyla işlendi ve analiz edildi.',
-          wordCount: extractionResult.metadata.wordCount,
-          pageCount: extractionResult.metadata.totalPages,
-          keyTopics: ['Ana konu 1', 'Ana konu 2', 'Ana konu 3'],
-          confidence: 'Yüksek'
+      try {
+        const analysisResult = await PDFProcessor.analyzeWithClaude(
+          extractionResult.text, 
+          selectedFile.name
+        );
+        
+        if (analysisResult.success) {
+          setAnalysisResults({
+            ...analysisResult.analysis,
+            extractedText: extractionResult.text,
+            metadata: extractionResult.metadata,
+            fileName: selectedFile.name,
+            analyzedAt: analysisResult.analyzedAt
+          });
+          
+          setProcessingProgress(100);
+          setProcessingStage('Analiz tamamlandı!');
+        } else {
+          throw new Error('Analiz başarısız oldu');
+        }
+      } catch (analysisError) {
+        console.warn('Claude analizi başarısız, yerel analiz kullanılıyor:', analysisError);
+        
+        const localAnalysis = {
+          ozet: 'PDF başarıyla işlendi. Metin çıkarma tamamlandı.',
+          anaKonular: ['Metin çıkarıldı', 'İstatistikler hesaplandı'],
+          onemligular: [`${extractionResult.metadata.wordCount} kelime bulundu`],
+          anahtarKelimeler: extractionResult.text.split(/\s+/)
+            .filter(word => word.length > 5)
+            .slice(0, 10),
+          oneriler: ['Claude API bağlantısı kontrol edilmeli'],
+          guvenSeviyesi: 'Düşük'
         };
         
         setAnalysisResults({
-          ...mockAnalysis,
+          ...localAnalysis,
           extractedText: extractionResult.text,
-          metadata: extractionResult.metadata
+          metadata: extractionResult.metadata,
+          fileName: selectedFile.name,
+          localAnalysis: true
         });
         
         setProcessingProgress(100);
-        setProcessingStage('Analiz tamamlandı!');
-        setIsProcessing(false);
-      }, 1500);
+        setProcessingStage('Yerel analiz tamamlandı');
+      }
+      
+      setIsProcessing(false);
       
     } catch (error) {
       console.error('PDF işleme hatası:', error);
@@ -162,11 +186,12 @@ function App() {
             <div className="result-header">
               <h3>Analiz Sonuçları</h3>
               <div className="method-info">
-                <span>Çıkarma Yöntemi: PDF.js</span>
+                <span>Analiz: {analysisResults.localAnalysis ? 'Yerel' : 'Claude AI'}</span>
                 <span className="confidence-badge" style={{
-                  backgroundColor: analysisResults.confidence === 'Yüksek' ? '#10b981' : '#f59e0b'
+                  backgroundColor: analysisResults.guvenSeviyesi === 'Yüksek' ? '#10b981' : 
+                                 analysisResults.guvenSeviyesi === 'Orta' ? '#f59e0b' : '#ef4444'
                 }}>
-                  {analysisResults.confidence} Güven
+                  {analysisResults.guvenSeviyesi} Güven
                 </span>
               </div>
             </div>
@@ -185,6 +210,57 @@ function App() {
                 <span className="stat-value">{analysisResults.metadata.characterCount.toLocaleString()}</span>
               </div>
             </div>
+            
+            {analysisResults.ozet && (
+              <div className="analysis-section">
+                <h4>📄 Özet</h4>
+                <p>{analysisResults.ozet}</p>
+              </div>
+            )}
+            
+            {analysisResults.anaKonular && analysisResults.anaKonular.length > 0 && (
+              <div className="analysis-section">
+                <h4>🎯 Ana Konular</h4>
+                <ul>
+                  {analysisResults.anaKonular.map((konu, index) => (
+                    <li key={index}>{konu}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            
+            {analysisResults.onemligular && analysisResults.onemligular.length > 0 && (
+              <div className="analysis-section">
+                <h4>💡 Önemli Bulgular</h4>
+                <ul>
+                  {analysisResults.onemligular.map((bulgu, index) => (
+                    <li key={index}>{bulgu}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            
+            {analysisResults.anahtarKelimeler && analysisResults.anahtarKelimeler.length > 0 && (
+              <div className="analysis-section">
+                <h4>🔑 Anahtar Kelimeler</h4>
+                <div className="keyword-tags">
+                  {analysisResults.anahtarKelimeler.map((kelime, index) => (
+                    <span key={index} className="keyword-tag">{kelime}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {analysisResults.oneriler && analysisResults.oneriler.length > 0 && (
+              <div className="analysis-section">
+                <h4>💭 Öneriler</h4>
+                <ul>
+                  {analysisResults.oneriler.map((oneri, index) => (
+                    <li key={index}>{oneri}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
             
             <div className="extracted-text">
               <h4>Çıkarılan Metin:</h4>
